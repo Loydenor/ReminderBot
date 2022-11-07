@@ -14,10 +14,14 @@ storage = MemoryStorage()
 bot = Bot(token = '5605614034:AAHNoNXooC9AN-cXT2auLennD0qlfVFxsKY') #Токен бота
 dp = Dispatcher(bot, storage=storage)                               #Передан экземпляр нашего бота
 
-#Создание этапов состоясния для создания напоминаний
+#Создание этапов для нового напоминания
 class FSMCreateReminder(StatesGroup):
     description = State()   #Этап создания описания
     date_and_time = State() #Этап создания даты и время
+
+#Создание этапов для удаления напоминания
+class FSMDeleteReminder(StatesGroup):
+    choice = State()   #Этап  
 
 @dp.message_handler()                            #Означает событие, когда в наш чат кто-то что-то пишет
 async def echo_message(message : types.Message): #Функция которая принимает смс от пользователя
@@ -33,10 +37,36 @@ async def echo_message(message : types.Message): #Функция которая 
         #Создание состояния
         await FSMCreateReminder.description.set()
         await message.reply('Напишите о чем вам напомнить.') 
+    #Мои напоминания
+    elif re.fullmatch('Мои напоминания', message.text):
+        keyboard = ReplyKeyboardMarkup(resize_keyboard = True).add(KeyboardButton('Редактировать')).add(KeyboardButton('Удалить')).add(KeyboardButton('Меню')) 
+        await bot.send_message(chat_id= message.from_user.id, text='Список ваших напоминаний:', reply_markup=keyboard) #Отправка сообщения пользователю
+        #Подключение базы данных
+        connection = pymysql.connect(
+            host='localhost',
+            port=3306,
+            user='root',
+            password='qwert123',
+            database='reminder_bot_bd',
+            cursorclass=pymysql.cursors.DictCursor
+        )    
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM reminder_bot_bd.info_table WHERE `user_id` = '{message.from_user.id}' ORDER BY `date` ASC, `time` ASC")
+            bd = cursor.fetchall()
+            ansMsg = ''
+            for i in range(len(bd)):
+                ansMsg += str(i+1) + '. ' + bd[i]['date'] + ' ' + bd[i]['description'] + ' в ' + bd[i]['time'] + '\n'
+            await message.answer(ansMsg)
+        connection.close()
+    #Удалить напоминание
+    elif re.fullmatch('Удалить', message.text):
+        keyboard = ReplyKeyboardMarkup(resize_keyboard = True).add(KeyboardButton('Меню')) #Создание клавиатурных кнопок
+        await FSMDeleteReminder.choice.set()
+        await message.answer('Выберите напоминание по списку, которое хотите удалить.')
 
     #Ловим первый ответ для создания напоминания 
     #Этап 1, создания описания
-    @dp.create_reminder_step1_handler(state=FSMCreateReminder.description)
+    @dp.message_handler(state=FSMCreateReminder.description)
     async def load_description(message: types.Message, state: FSMContext):
         async with state.proxy() as data:
             data['description'] = message.text
@@ -47,7 +77,7 @@ async def echo_message(message : types.Message): #Функция которая 
         await FSMCreateReminder.next()
 
     #Этап 2, создания даты и время
-    @dp.create_reminder_step2_handler(state=FSMCreateReminder.date_and_time)
+    @dp.callback_query_handler(state=FSMCreateReminder.date_and_time)
     async def buttons(call: types.CallbackQuery, state: FSMContext):
         #Изменение месяца
         if call.data.split('_')[1] == 'month':
@@ -123,11 +153,12 @@ async def echo_message(message : types.Message): #Функция которая 
                     connection.commit()
                 connection.close()
             #Закрыть состояние
-            await state.finish()
-        #Мои напоминания
-        elif re.fullmatch('Мои напоминания', message.text):
-            keyboard = ReplyKeyboardMarkup(resize_keyboard = True).add(KeyboardButton('Редактировать')).add(KeyboardButton('Удалить')).add(KeyboardButton('Меню')) 
-            await bot.send_message(chat_id= message.from_user.id, text='Список ваших напоминаний:', reply_markup=keyboard) #Отправка сообщения пользователю
+            await state.finish()  
+    #Ловим ответ на удаление
+    @dp.message_handler(state=FSMDeleteReminder.choice)
+    async def load_choice(message: types.Message, state: FSMContext):
+        async with state.proxy() as data:
+            data['choice'] = message.text
             #Подключение базы данных
             connection = pymysql.connect(
                 host='localhost',
@@ -136,23 +167,31 @@ async def echo_message(message : types.Message): #Функция которая 
                 password='qwert123',
                 database='reminder_bot_bd',
                 cursorclass=pymysql.cursors.DictCursor
-            )
-            
+            )    
             with connection.cursor() as cursor:
                 cursor.execute(f"SELECT * FROM reminder_bot_bd.info_table WHERE `user_id` = '{message.from_user.id}' ORDER BY `date` ASC, `time` ASC")
                 bd = cursor.fetchall()
-                ansMsg = 'Ваш список напоминаний: \n'
+                #ansMsg = 'Ваш список напоминаний: \n'
+                flag = False
                 for i in range(len(bd)):
-                    ansMsg += str(i+1) + '. ' + bd[i]['date'] + ' ' + bd[i]['description'] + ' в ' + bd[i]['time'] + '\n'
-                await message.answer(ansMsg)
+                    if (i+1) == int(data['choice']):
+                        cursor.execute(f"DELETE FROM reminder_bot_bd.info_table WHERE `user_id` = '{message.from_user.id}' AND `date` = '{bd[i]['date']}' AND `time` = '{bd[i]['time']}' AND `description` = '{bd[i]['description']}'")
+                        connection.commit()
+                        keyboard = ReplyKeyboardMarkup(resize_keyboard = True).add(KeyboardButton('Создать напоминание')).add(KeyboardButton('Мои напоминания'))
+                        await bot.send_message(chat_id= message.from_user.id, text='Это напоминание успешно удалено', reply_markup=keyboard)
+                        ansMsg = 'Ваш новый список напоминаний: \n'
+                        for i in range(len(bd)):
+                            ansMsg += str(i+1) + '. ' + bd[i]['date'] + ' ' + bd[i]['description'] + ' в ' + bd[i]['time'] + '\n'
+                        flag = True
+                        
+                # if flag == False:
+                #     message.answer('К сожалению такого напоминания нет в списке, попробуйте еще раз.')
             connection.close()
+        #Закрыть состояние
+        await state.finish() 
     #Редактировать напоминание
     # elif re.fullmatch('Редактировать', message.text):
     #     await message.answer('Выберите напоминание по списку, которое хотите редактировать.')
-        
-        #Удалить напоминание
-        elif re.fullmatch('Удалить', message.text):
-            await message.answer('Выберите напоминание по списку, которое хотите удалить.') 
     # #Выход в главное меню
     # elif re.fullmatch('Меню', message.text):
     #     keyboard = ReplyKeyboardMarkup(resize_keyboard = True).add(KeyboardButton('Создать напоминание')).add(KeyboardButton('Мои напоминания'))
