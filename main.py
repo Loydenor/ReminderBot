@@ -120,9 +120,9 @@ async def echo_message(message : types.Message): #Функция которая 
     #Этап 2, создания даты и время
     @dp.callback_query_handler(state=FSMCreateReminder.date_and_time)
     async def buttons(call: types.CallbackQuery, state: FSMContext):
+        months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
         #Изменение месяца
         if call.data.split('_')[1] == 'month':
-            months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
             #Изменяем тект кнопки, какая кнопка, на какой строчке, текущая форма
             inlkb = mode_inline_keyboard(months[int(call.data.split('_')[0])], 'save_monthResult', 3, call['message']['reply_markup'])
             #Изменение клавиатуры. Id пользователя, Id сообщения, новая форма
@@ -142,7 +142,7 @@ async def echo_message(message : types.Message): #Функция которая 
         #Изменение дня
         elif call.data.split('_')[1] == 'day':
             if call.data.split('_')[0] == 'plus':
-                if int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1 <= monthrange(datetime.today().year, months[int(call['message']['reply_markup']['inline_keyboard'][3][0]['text'])+1])[1]:
+                if int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1 <= monthrange(datetime.today().year, months.index(call['message']['reply_markup']['inline_keyboard'][3][0]['text'])+1)[1]:
                     inlkb = mode_inline_keyboard(str(int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1), 'save_dayResult', 8, call['message']['reply_markup'])
                     await bot.edit_message_reply_markup(call.from_user.id, call.message.message_id, reply_markup=inlkb)
                 return
@@ -323,9 +323,9 @@ async def echo_message(message : types.Message): #Функция которая 
     #Ловим 3 ответ на редактирование
     @dp.callback_query_handler(state=FSMEditReminder.date_and_time)
     async def buttons(call: types.CallbackQuery, state: FSMContext):
+        months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
         #Изменение месяца
         if call.data.split('_')[1] == 'month':
-            months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
             #Изменяем тект кнопки, какая кнопка, на какой строчке, текущая форма
             inlkb = mode_inline_keyboard(months[int(call.data.split('_')[0])], 'save_monthResult', 3, call['message']['reply_markup'])
             #Изменение клавиатуры. Id пользователя, Id сообщения, новая форма
@@ -345,7 +345,7 @@ async def echo_message(message : types.Message): #Функция которая 
         #Изменение дня
         elif call.data.split('_')[1] == 'day':
             if call.data.split('_')[0] == 'plus':
-                if int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1 <= monthrange(datetime.today().year, months[int(call['message']['reply_markup']['inline_keyboard'][3][0]['text'])+1])[1]:
+                if int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1 <= monthrange(datetime.today().year, months.index(call['message']['reply_markup']['inline_keyboard'][3][0]['text'])+1)[1]:
                     inlkb = mode_inline_keyboard(str(int(call['message']['reply_markup']['inline_keyboard'][8][0]['text'])+1), 'save_dayResult', 8, call['message']['reply_markup'])
                     await bot.edit_message_reply_markup(call.from_user.id, call.message.message_id, reply_markup=inlkb)
                 return
@@ -442,7 +442,6 @@ async def checker_reminer():
 
             cursor.execute(f"SELECT * FROM reminder_bot_bd.info_table WHERE `date` <= '{date_today}' AND `time` <= '{time_now}'") 
             bd = cursor.fetchall()
-            print(bd)
             if len(bd):
                 for i in range(len(bd)):
                     await bot.send_message(bd[i]['user_id'], f"❗️Напоминание❗️\n\n{bd[i]['description']}")
